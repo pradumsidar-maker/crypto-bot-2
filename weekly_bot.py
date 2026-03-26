@@ -1,55 +1,41 @@
 import os
 import time
 import threading
+import asyncio
 from flask import Flask
 from telegram import Bot
 
-# ===== DEBUG TOKEN =====
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-print("BOT_TOKEN:", BOT_TOKEN)
-print("CHAT_ID:", CHAT_ID)
+bot = Bot(token=BOT_TOKEN)
 
-# ===== SAFE BOT INIT =====
-bot = None
-if BOT_TOKEN:
+# ✅ ASYNC FUNCTION
+async def send_telegram():
     try:
-        bot = Bot(token=BOT_TOKEN)
+        await bot.send_message(chat_id=CHAT_ID, text="🚀 BOT 2 WORKING!")
+        print("✅ Message sent")
     except Exception as e:
-        print("Bot init error:", e)
-else:
-    print("❌ BOT_TOKEN missing")
+        print("❌ Error:", e)
 
-# ===== SEND TEST =====
-def send_test():
-    if bot and CHAT_ID:
-        try:
-            bot.send_message(chat_id=CHAT_ID, text="🔥 DEBUG SUCCESS")
-            print("✅ Message sent")
-        except Exception as e:
-            print("Send error:", e)
-    else:
-        print("❌ Missing bot or chat id")
-
-# ===== LOOP =====
+# 🔥 RUN ASYNC
 def run_bot():
-    send_test()
+    asyncio.run(send_telegram())
     while True:
         print("Bot running...")
         time.sleep(60)
 
-# ===== FLASK =====
+# 🌐 Flask server
 app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "Bot running"
+    return "Bot is running"
 
 def run_web():
     app.run(host="0.0.0.0", port=10000)
 
-# ===== START =====
+# 🚀 START
 if __name__ == "__main__":
     threading.Thread(target=run_web).start()
     run_bot()

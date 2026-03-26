@@ -4,39 +4,52 @@ import threading
 from flask import Flask
 from telegram import Bot
 
-# ===== ENV VARIABLES =====
-BOT_TOKEN = os.getenv("8690174599:AAEMuipJVajwkZaBBsoPxsor-c1H3NxdP3M")
-CHAT_ID = os.getenv("5270697473")
+# ===== DEBUG TOKEN =====
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
-# ===== TELEGRAM BOT =====
-bot = Bot(token=BOT_TOKEN)
+print("BOT_TOKEN:", BOT_TOKEN)
+print("CHAT_ID:", CHAT_ID)
 
-# ===== SEND START MESSAGE =====
-def send_start_message():
+# ===== SAFE BOT INIT =====
+bot = None
+if BOT_TOKEN:
     try:
-        bot.send_message(chat_id=CHAT_ID, text="🚀 BOT 2 LIVE & WORKING!")
-        print("Message sent successfully")
+        bot = Bot(token=BOT_TOKEN)
     except Exception as e:
-        print("Error sending message:", e)
+        print("Bot init error:", e)
+else:
+    print("❌ BOT_TOKEN missing")
 
-# ===== BACKGROUND LOOP =====
+# ===== SEND TEST =====
+def send_test():
+    if bot and CHAT_ID:
+        try:
+            bot.send_message(chat_id=CHAT_ID, text="🔥 DEBUG SUCCESS")
+            print("✅ Message sent")
+        except Exception as e:
+            print("Send error:", e)
+    else:
+        print("❌ Missing bot or chat id")
+
+# ===== LOOP =====
 def run_bot():
-    send_start_message()  # run once on start
+    send_test()
     while True:
         print("Bot running...")
         time.sleep(60)
 
-# ===== FLASK SERVER (RENDER FREE FIX) =====
+# ===== FLASK =====
 app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "Bot is running"
+    return "Bot running"
 
 def run_web():
     app.run(host="0.0.0.0", port=10000)
 
-# ===== START THREADS =====
+# ===== START =====
 if __name__ == "__main__":
     threading.Thread(target=run_web).start()
     run_bot()

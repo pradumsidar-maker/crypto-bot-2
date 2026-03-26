@@ -15,13 +15,10 @@ bot = Bot(token=BOT_TOKEN)
 
 # 🔥 Futures Coins
 COINS = [
-    "BTCUSDT","ETHUSDT","SOLUSDT","BNBUSDT","XRPUSDT",
-    "DOGEUSDT","ADAUSDT","TRXUSDT","LINKUSDT","MATICUSDT",
-    "LTCUSDT","DOTUSDT","BCHUSDT","AVAXUSDT","UNIUSDT",
-    "ATOMUSDT","XLMUSDT","ETCUSDT","FILUSDT","APTUSDT"
+    "BTCUSDT","ETHUSDT","SOLUSDT","BNBUSDT","XRPUSDT"
 ]
 
-# 🧠 Tracking
+# Tracking
 hl_triggered = {}
 oc_triggered = {}
 
@@ -32,7 +29,7 @@ def get_price(symbol):
     url = f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={symbol}"
     return float(requests.get(url).json()["price"])
 
-# 🔄 Weekly data (Binance klines)
+# 🔄 Weekly data
 def get_weekly_levels(symbol):
     url = f"https://fapi.binance.com/fapi/v1/klines"
     params = {
@@ -57,15 +54,18 @@ async def send(msg):
         await bot.send_message(chat_id=CHAT_ID, text=msg)
         print("Sent:", msg)
     except Exception as e:
-        print("Error:", e)
+        print("Telegram Error:", e)
 
 # 🗓️ Week key
 def week_key():
     now = datetime.now(tz)
     return f"{now.year}-{now.isocalendar()[1]}"
 
-# 🚀 MAIN LOGIC
+# 🚀 MAIN BOT
 async def run_bot():
+    # ✅ START MESSAGE (FIXED)
+    await send("✅ Bot Started Successfully 🚀")
+
     while True:
         wk = week_key()
 
@@ -77,24 +77,26 @@ async def run_bot():
                 key1 = f"{coin}-{wk}-hl"
                 key2 = f"{coin}-{wk}-oc"
 
-                # 🔔 1: HIGH / LOW
+                print(coin, price)
+
+                # 🔔 HIGH / LOW
                 if price >= high and not hl_triggered.get(key1):
-                    await send(f"🚀 {coin} HIGH TOUCH\nPrice: {round(price,2)} USDT")
+                    await send(f"🚀 {coin} HIGH TOUCH\nPrice: {price} USDT")
                     hl_triggered[key1] = True
 
                 elif price <= low and not hl_triggered.get(key1):
-                    await send(f"🔻 {coin} LOW TOUCH\nPrice: {round(price,2)} USDT")
+                    await send(f"🔻 {coin} LOW TOUCH\nPrice: {price} USDT")
                     hl_triggered[key1] = True
 
-                # 🔔 2: OPEN / CLOSE (after HL)
+                # 🔔 OPEN / CLOSE
                 if hl_triggered.get(key1) and not oc_triggered.get(key2):
 
-                    if abs(price - open_p) / open_p < 0.001:
-                        await send(f"📊 {coin} OPEN TOUCH\nPrice: {round(price,2)} USDT")
+                    if abs(price - open_p) / open_p < 0.01:
+                        await send(f"📊 {coin} OPEN TOUCH\nPrice: {price} USDT")
                         oc_triggered[key2] = True
 
-                    elif abs(price - close) / close < 0.001:
-                        await send(f"📊 {coin} CLOSE TOUCH\nPrice: {round(price,2)} USDT")
+                    elif abs(price - close) / close < 0.01:
+                        await send(f"📊 {coin} CLOSE TOUCH\nPrice: {price} USDT")
                         oc_triggered[key2] = True
 
             except Exception as e:
@@ -102,21 +104,17 @@ async def run_bot():
 
         await asyncio.sleep(60)
 
-# 🌐 Flask
+# 🌐 Flask (Render ke liye)
 app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "Futures bot running"
+    return "Bot running"
 
 def run_web():
     app.run(host="0.0.0.0", port=10000)
 
-# ▶️ Start
-def start():
-    asyncio.run(run_bot())
-
+# ▶️ START
 if __name__ == "__main__":
     threading.Thread(target=run_web).start()
-    start()
-await send("✅ Bot Started Successfully 🚀")
+    asyncio.run(run_bot())

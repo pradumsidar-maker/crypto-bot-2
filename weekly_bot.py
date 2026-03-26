@@ -119,3 +119,4 @@ def start():
 if __name__ == "__main__":
     threading.Thread(target=run_web).start()
     start()
+await send("✅ Bot Started Successfully 🚀")

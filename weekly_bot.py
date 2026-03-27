@@ -96,6 +96,7 @@ async def run_bot():
         for coin in COINS:
             try:
                 price = get_price(coin)
+                await send(f"TEST ALERT {coin} {price}")
                 open_p, high, low, close = get_weekly_levels(coin)
 
                 key1 = f"{coin}-{wk}-hl"

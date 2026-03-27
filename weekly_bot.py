@@ -27,11 +27,11 @@ tz = pytz.timezone("Asia/Kolkata")
 
 LAST_FILE = "last_run.txt"
 
-# 📩 SEND MESSAGE
+# 📩 SEND
 async def send(msg):
     try:
         await bot.send_message(chat_id=CHAT_ID, text=msg)
-        print(msg)
+        await asyncio.sleep(1)  # anti spam
     except Exception as e:
         print("Telegram Error:", e)
 
@@ -52,13 +52,19 @@ def save_time():
     with open(LAST_FILE, "w") as f:
         f.write(str(datetime.now(tz).timestamp()))
 
-# 🔄 HEARTBEAT
-async def heartbeat():
+# 🔄 HEARTBEAT SAVE
+async def heartbeat_save():
     while True:
         save_time()
         await asyncio.sleep(300)
 
-# 🔄 FUTURES PRICE
+# 🟢 HEARTBEAT ALERT (10 min)
+async def heartbeat_alert():
+    while True:
+        await send("🟢 BOT LIVE - Running ✅")
+        await asyncio.sleep(600)
+
+# 🔄 PRICE
 def get_price(symbol):
     url = f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={symbol}"
     return float(requests.get(url).json()["price"])
@@ -68,7 +74,6 @@ def get_weekly_levels(symbol):
     url = f"https://fapi.binance.com/fapi/v1/klines"
     params = {"symbol": symbol, "interval": "1w", "limit": 2}
     data = requests.get(url, params=params).json()
-
     prev = data[0]
     return float(prev[1]), float(prev[2]), float(prev[3]), float(prev[4])
 
@@ -84,52 +89,57 @@ async def run_bot():
     if check_sleep():
         await send("😴 Bot was in SLEEP mode!")
 
-    # 🟢 Start message
+    # 🟢 Start
     await send("✅ Futures Bot STARTED 🚀")
 
-    # 🔄 Parallel run
-    asyncio.create_task(heartbeat())
+    # 🔥 Parallel systems
+    asyncio.create_task(heartbeat_save())
+    asyncio.create_task(heartbeat_alert())
 
     while True:
-        wk = week_key()
+        try:
+            wk = week_key()
 
-        for coin in COINS:
-            try:
-                price = get_price(coin)
-                await send(f"TEST ALERT {coin} {price}")
-                open_p, high, low, close = get_weekly_levels(coin)
+            for coin in COINS:
+                try:
+                    price = get_price(coin)
+                    open_p, high, low, close = get_weekly_levels(coin)
 
-                key1 = f"{coin}-{wk}-hl"
-                key2 = f"{coin}-{wk}-oc"
+                    key1 = f"{coin}-{wk}-hl"
+                    key2 = f"{coin}-{wk}-oc"
 
-                print(f"{coin} Price: {price}")
+                    print(f"{coin} {price}")
 
-                # 🔔 HIGH / LOW
-                if price >= high and not hl_triggered.get(key1):
-                    await send(f"🚀 {coin} HIGH BREAKOUT\nPrice: {price} USDT")
-                    hl_triggered[key1] = True
+                    # 🔔 HIGH / LOW
+                    if price >= high and not hl_triggered.get(key1):
+                        await send(f"🚀 {coin} HIGH BREAKOUT\nPrice: {price} USDT")
+                        hl_triggered[key1] = True
 
-                elif price <= low and not hl_triggered.get(key1):
-                    await send(f"🔻 {coin} LOW BREAKDOWN\nPrice: {price} USDT")
-                    hl_triggered[key1] = True
+                    elif price <= low and not hl_triggered.get(key1):
+                        await send(f"🔻 {coin} LOW BREAKDOWN\nPrice: {price} USDT")
+                        hl_triggered[key1] = True
 
-                # 🔔 OPEN / CLOSE
-                if hl_triggered.get(key1) and not oc_triggered.get(key2):
+                    # 🔔 OPEN / CLOSE
+                    if hl_triggered.get(key1) and not oc_triggered.get(key2):
 
-                    if abs(price - open_p) / open_p < 0.01:
-                        await send(f"📊 {coin} OPEN TOUCH\nPrice: {price} USDT")
-                        oc_triggered[key2] = True
+                        if abs(price - open_p) / open_p < 0.01:
+                            await send(f"📊 {coin} OPEN TOUCH\nPrice: {price} USDT")
+                            oc_triggered[key2] = True
 
-                    elif abs(price - close) / close < 0.01:
-                        await send(f"📊 {coin} CLOSE TOUCH\nPrice: {price} USDT")
-                        oc_triggered[key2] = True
+                        elif abs(price - close) / close < 0.01:
+                            await send(f"📊 {coin} CLOSE TOUCH\nPrice: {price} USDT")
+                            oc_triggered[key2] = True
 
-            except Exception as e:
-                print("Error:", coin, e)
+                except Exception as e:
+                    print("Coin Error:", coin, e)
 
-        await asyncio.sleep(120)
+            await asyncio.sleep(120)
 
-# 🌐 Flask (Render)
+        except Exception as e:
+            print("Main Error:", e)
+            await asyncio.sleep(10)
+
+# 🌐 Flask
 app = Flask(__name__)
 
 @app.route("/")

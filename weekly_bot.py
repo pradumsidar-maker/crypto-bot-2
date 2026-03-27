@@ -12,7 +12,7 @@ CHAT_ID = os.getenv("CHAT_ID")
 
 bot = Bot(token=BOT_TOKEN)
 
-# 🔥 TOP 20 FUTURES COINS
+# 🔥 TOP 20 COINS
 COINS = [
 "BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT",
 "ADAUSDT","DOGEUSDT","TRXUSDT","LINKUSDT","MATICUSDT",
@@ -25,37 +25,70 @@ oc_triggered = {}
 
 tz = pytz.timezone("Asia/Kolkata")
 
-# 🔄 Futures Price
+LAST_FILE = "last_run.txt"
+
+# 📩 SEND MESSAGE
+async def send(msg):
+    try:
+        await bot.send_message(chat_id=CHAT_ID, text=msg)
+        print(msg)
+    except Exception as e:
+        print("Telegram Error:", e)
+
+# 🧠 SLEEP CHECK
+def check_sleep():
+    if os.path.exists(LAST_FILE):
+        with open(LAST_FILE, "r") as f:
+            last_time = float(f.read())
+
+        now = datetime.now(tz).timestamp()
+
+        if now - last_time > 600:
+            return True
+    return False
+
+# 💾 SAVE TIME
+def save_time():
+    with open(LAST_FILE, "w") as f:
+        f.write(str(datetime.now(tz).timestamp()))
+
+# 🔄 HEARTBEAT
+async def heartbeat():
+    while True:
+        save_time()
+        await asyncio.sleep(300)
+
+# 🔄 FUTURES PRICE
 def get_price(symbol):
     url = f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={symbol}"
     return float(requests.get(url).json()["price"])
 
-# 🔄 Weekly Levels
+# 🔄 WEEKLY LEVELS
 def get_weekly_levels(symbol):
     url = f"https://fapi.binance.com/fapi/v1/klines"
     params = {"symbol": symbol, "interval": "1w", "limit": 2}
     data = requests.get(url, params=params).json()
 
     prev = data[0]
-
     return float(prev[1]), float(prev[2]), float(prev[3]), float(prev[4])
 
-# 📩 Telegram Send
-async def send(msg):
-    try:
-        await bot.send_message(chat_id=CHAT_ID, text=msg)
-        print("Sent:", msg)
-    except Exception as e:
-        print("Telegram Error:", e)
-
-# 🗓️ Week Key
+# 🗓️ WEEK KEY
 def week_key():
     now = datetime.now(tz)
     return f"{now.year}-{now.isocalendar()[1]}"
 
 # 🚀 MAIN BOT
 async def run_bot():
-    await send("✅ Futures Bot Started 🚀")
+
+    # 🔴 Sleep detect
+    if check_sleep():
+        await send("😴 Bot was in SLEEP mode!")
+
+    # 🟢 Start message
+    await send("✅ Futures Bot STARTED 🚀")
+
+    # 🔄 Parallel run
+    asyncio.create_task(heartbeat())
 
     while True:
         wk = week_key()
@@ -70,7 +103,7 @@ async def run_bot():
 
                 print(f"{coin} Price: {price}")
 
-                # 🔔 HIGH / LOW ALERT
+                # 🔔 HIGH / LOW
                 if price >= high and not hl_triggered.get(key1):
                     await send(f"🚀 {coin} HIGH BREAKOUT\nPrice: {price} USDT")
                     hl_triggered[key1] = True
@@ -79,7 +112,7 @@ async def run_bot():
                     await send(f"🔻 {coin} LOW BREAKDOWN\nPrice: {price} USDT")
                     hl_triggered[key1] = True
 
-                # 🔔 OPEN / CLOSE ALERT (after HL)
+                # 🔔 OPEN / CLOSE
                 if hl_triggered.get(key1) and not oc_triggered.get(key2):
 
                     if abs(price - open_p) / open_p < 0.01:
@@ -93,14 +126,14 @@ async def run_bot():
             except Exception as e:
                 print("Error:", coin, e)
 
-        await asyncio.sleep(120)  # 🔥 Free plan optimized
+        await asyncio.sleep(120)
 
-# 🌐 Flask (Render ke liye)
+# 🌐 Flask (Render)
 app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "Futures Bot Running"
+    return "Bot Running"
 
 def run_web():
     app.run(host="0.0.0.0", port=10000)

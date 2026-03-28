@@ -2,6 +2,7 @@ import os
 import threading
 import asyncio
 import requests
+import json
 from datetime import datetime
 import pytz
 from flask import Flask
@@ -12,26 +13,46 @@ CHAT_ID = os.getenv("CHAT_ID")
 
 bot = Bot(token=BOT_TOKEN)
 
-# 🔥 TOP 20 COINS
+# 🔥 TOP 50 COINS
 COINS = [
 "BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT",
 "ADAUSDT","DOGEUSDT","TRXUSDT","LINKUSDT","MATICUSDT",
 "DOTUSDT","LTCUSDT","BCHUSDT","AVAXUSDT","UNIUSDT",
-"ATOMUSDT","XLMUSDT","ETCUSDT","FILUSDT","APTUSDT"
-]
+"ATOMUSDT","XLMUSDT","ETCUSDT","FILUSDT","APTUSDT",
 
-hl_triggered = {}
-oc_triggered = {}
+# +30 more
+"NEARUSDT","ICPUSDT","HBARUSDT","ARBUSDT","OPUSDT",
+"SANDUSDT","MANAUSDT","AXSUSDT","EGLDUSDT","THETAUSDT",
+"FLOWUSDT","XTZUSDT","KLAYUSDT","GRTUSDT","CHZUSDT",
+"CRVUSDT","DYDXUSDT","1INCHUSDT","ZILUSDT","ENJUSDT",
+"BATUSDT","HOTUSDT","FTMUSDT","RNDRUSDT","LDOUSDT",
+"STXUSDT","GMXUSDT","IMXUSDT","BLURUSDT","PEPEUSDT"
+]
 
 tz = pytz.timezone("Asia/Kolkata")
 
+STATE_FILE = "state.json"
 LAST_FILE = "last_run.txt"
+
+# 🔄 LOAD STATE
+def load_state():
+    if os.path.exists(STATE_FILE):
+        with open(STATE_FILE, "r") as f:
+            return json.load(f)
+    return {"hl": {}, "oc": {}}
+
+# 💾 SAVE STATE
+def save_state(data):
+    with open(STATE_FILE, "w") as f:
+        json.dump(data, f)
+
+state = load_state()
 
 # 📩 SEND
 async def send(msg):
     try:
         await bot.send_message(chat_id=CHAT_ID, text=msg)
-        await asyncio.sleep(1)  # anti spam
+        await asyncio.sleep(1)
     except Exception as e:
         print("Telegram Error:", e)
 
@@ -40,11 +61,8 @@ def check_sleep():
     if os.path.exists(LAST_FILE):
         with open(LAST_FILE, "r") as f:
             last_time = float(f.read())
-
         now = datetime.now(tz).timestamp()
-
-        if now - last_time > 600:
-            return True
+        return now - last_time > 1800   # 30 min gap = sleep
     return False
 
 # 💾 SAVE TIME
@@ -58,13 +76,13 @@ async def heartbeat_save():
         save_time()
         await asyncio.sleep(300)
 
-# 🟢 HEARTBEAT ALERT (10 min)
+# 🟢 HEARTBEAT ALERT (6 HOURS)
 async def heartbeat_alert():
     while True:
-        await send("🟢 BOT LIVE - Running ✅")
-        await asyncio.sleep(600)
+        await send("🟢 BOT LIVE (6h check) ✅")
+        await asyncio.sleep(21600)  # 6 hours
 
-# 🔄 PRICE
+# 🔄 PRICE (FUTURES)
 def get_price(symbol):
     url = f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={symbol}"
     return float(requests.get(url).json()["price"])
@@ -85,14 +103,11 @@ def week_key():
 # 🚀 MAIN BOT
 async def run_bot():
 
-    # 🔴 Sleep detect
     if check_sleep():
-        await send("😴 Bot was in SLEEP mode!")
+        await send("😴 Bot woke up from SLEEP mode")
 
-    # 🟢 Start
     await send("✅ Futures Bot STARTED 🚀")
 
-    # 🔥 Parallel systems
     asyncio.create_task(heartbeat_save())
     asyncio.create_task(heartbeat_alert())
 
@@ -108,30 +123,30 @@ async def run_bot():
                     key1 = f"{coin}-{wk}-hl"
                     key2 = f"{coin}-{wk}-oc"
 
-                    print(f"{coin} {price}")
-
                     # 🔔 HIGH / LOW
-                    if price >= high and not hl_triggered.get(key1):
+                    if price >= high and not state["hl"].get(key1):
                         await send(f"🚀 {coin} HIGH BREAKOUT\nPrice: {price} USDT")
-                        hl_triggered[key1] = True
+                        state["hl"][key1] = True
 
-                    elif price <= low and not hl_triggered.get(key1):
+                    elif price <= low and not state["hl"].get(key1):
                         await send(f"🔻 {coin} LOW BREAKDOWN\nPrice: {price} USDT")
-                        hl_triggered[key1] = True
+                        state["hl"][key1] = True
 
                     # 🔔 OPEN / CLOSE
-                    if hl_triggered.get(key1) and not oc_triggered.get(key2):
+                    if state["hl"].get(key1) and not state["oc"].get(key2):
 
                         if abs(price - open_p) / open_p < 0.01:
                             await send(f"📊 {coin} OPEN TOUCH\nPrice: {price} USDT")
-                            oc_triggered[key2] = True
+                            state["oc"][key2] = True
 
                         elif abs(price - close) / close < 0.01:
                             await send(f"📊 {coin} CLOSE TOUCH\nPrice: {price} USDT")
-                            oc_triggered[key2] = True
+                            state["oc"][key2] = True
 
                 except Exception as e:
                     print("Coin Error:", coin, e)
+
+            save_state(state)
 
             await asyncio.sleep(120)
 
@@ -139,23 +154,7 @@ async def run_bot():
             print("Main Error:", e)
             await asyncio.sleep(10)
 
-# 🌐 Flask
-app = Flask(__name__)
-
-@app.route("/")
-def home():
-    return "Bot Running"
-
-def run_web():
-    app.run(host="0.0.0.0", port=10000)
-
-# ▶️ START
-if __name__ == "__main__":
-    threading.Thread(target=run_web).start()
-    asyncio.run(run_bot())
-from flask import Flask
-import os
-
+# 🌐 Flask (KEEP ALIVE)
 app = Flask(__name__)
 
 @app.route("/")
@@ -166,5 +165,10 @@ def home():
 def ping():
     return "pong"
 
-if __name__ == "__main__":
+def run_web():
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
+# ▶️ START
+if __name__ == "__main__":
+    threading.Thread(target=run_web).start()
+    asyncio.run(run_bot())

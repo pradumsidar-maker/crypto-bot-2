@@ -13,7 +13,7 @@ CHAT_ID = os.getenv("CHAT_ID")
 
 bot = Bot(token=BOT_TOKEN)
 
-# 🔥 TOP 50 COINS
+# 🔥 COINS
 COINS = [
 "BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT",
 "ADAUSDT","DOGEUSDT","TRXUSDT","LINKUSDT","MATICUSDT",
@@ -21,10 +21,10 @@ COINS = [
 "ATOMUSDT","XLMUSDT","ETCUSDT","FILUSDT","APTUSDT",
 "NEARUSDT","ICPUSDT","HBARUSDT","ARBUSDT","OPUSDT",
 "SANDUSDT","MANAUSDT","AXSUSDT","EGLDUSDT","THETAUSDT",
-"FLOWUSDT","XTZUSDT","KLAYUSDT","GRTUSDT","CHZUSDT",
-"CRVUSDT","DYDXUSDT","1INCHUSDT","ZILUSDT","ENJUSDT",
-"BATUSDT","HOTUSDT","FTMUSDT","RNDRUSDT","LDOUSDT",
-"STXUSDT","GMXUSDT","IMXUSDT","BLURUSDT","PEPEUSDT"
+"FLOWUSDT","XTZUSDT","GRTUSDT","CHZUSDT","CRVUSDT",
+"DYDXUSDT","1INCHUSDT","ZILUSDT","ENJUSDT","FTMUSDT",
+"LDOUSDT","STXUSDT","GMXUSDT","IMXUSDT","RNDRUSDT",
+"BLURUSDT","PEPEUSDT","ALGOUSDT"
 ]
 
 tz = pytz.timezone("Asia/Kolkata")
@@ -51,118 +51,95 @@ async def send(msg):
     except Exception as e:
         print("Telegram Error:", e)
 
-def check_sleep():
-    if os.path.exists(LAST_FILE):
-        with open(LAST_FILE, "r") as f:
-            last_time = float(f.read())
-        now = datetime.now(tz).timestamp()
-        return now - last_time > 1800
-    return False
+def week_key():
+    now = datetime.now(tz)
+    return f"{now.year}-{now.isocalendar()[1]}"
 
-def save_time():
-    with open(LAST_FILE, "w") as f:
-        f.write(str(datetime.now(tz).timestamp()))
+def day_key():
+    now = datetime.now(tz)
+    return f"{now.year}-{now.month}-{now.day}"
 
-async def heartbeat_save():
-    while True:
-        save_time()
-        await asyncio.sleep(300)
-
-async def heartbeat_alert():
-    while True:
-        await send("🟢 BOT LIVE (6h check) ✅")
-        await asyncio.sleep(21600)
-
+# 📊 API
 def get_price(symbol):
     url = f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={symbol}"
     return float(requests.get(url).json()["price"])
 
 def get_weekly_levels(symbol):
-    url = f"https://fapi.binance.com/fapi/v1/klines"
+    url = "https://fapi.binance.com/fapi/v1/klines"
     params = {"symbol": symbol, "interval": "1w", "limit": 2}
     data = requests.get(url, params=params).json()
     prev = data[0]
     return float(prev[1]), float(prev[2]), float(prev[3]), float(prev[4])
 
-def week_key():
-    now = datetime.now(tz)
-    return f"{now.year}-{now.isocalendar()[1]}"
+def get_daily_levels(symbol):
+    url = "https://fapi.binance.com/fapi/v1/klines"
+    params = {"symbol": symbol, "interval": "1d", "limit": 2}
+    data = requests.get(url, params=params).json()
+    prev = data[0]
+    return float(prev[1]), float(prev[2]), float(prev[3]), float(prev[4])
 
+# 🚀 MAIN BOT
 async def run_bot():
-
-    if check_sleep():
-        await send("😴 Bot woke up from SLEEP mode")
-
-    await send("✅ Futures Bot STARTED 🚀")
-
-    asyncio.create_task(heartbeat_save())
-    asyncio.create_task(heartbeat_alert())
+    await send("✅ Bot STARTED 🚀")
 
     while True:
         try:
             wk = week_key()
+            dk = day_key()
 
             for coin in COINS:
                 try:
                     price = get_price(coin)
-                    open_p, high, low, close = get_weekly_levels(coin)
 
+                    # 🔹 WEEKLY
+                    open_p, high, low, close = get_weekly_levels(coin)
                     key1 = f"{coin}-{wk}-hl"
                     key2 = f"{coin}-{wk}-oc"
 
-                    # 🔔 ALL-IN-ONE ALERT
                     if not state["hl"].get(key1):
 
                         if price >= high:
-                            await send(
-                                f"🚀 {coin} BREAKOUT ALERT\n"
-                                f"💰 Price: {price} USDT\n\n"
-                                f"📊 Prev Week Levels:\n"
-                                f"🟢 Open: {open_p}\n"
-                                f"🔼 High: {high}\n"
-                                f"🔽 Low: {low}\n"
-                                f"🔴 Close: {close}"
-                            )
+                            await send(f"🚀 {coin} WEEKLY BREAKOUT\nPrice: {price}")
                             state["hl"][key1] = True
 
                         elif price <= low:
-                            await send(
-                                f"🔻 {coin} BREAKDOWN ALERT\n"
-                                f"💰 Price: {price} USDT\n\n"
-                                f"📊 Prev Week Levels:\n"
-                                f"🟢 Open: {open_p}\n"
-                                f"🔼 High: {high}\n"
-                                f"🔽 Low: {low}\n"
-                                f"🔴 Close: {close}"
-                            )
+                            await send(f"🔻 {coin} WEEKLY BREAKDOWN\nPrice: {price}")
                             state["hl"][key1] = True
 
-                    # 🔔 OPEN / CLOSE AFTER BREAKOUT
                     if state["hl"].get(key1) and not state["oc"].get(key2):
 
-                        if abs(price - open_p) / open_p < 0.01:
-                            await send(
-                                f"📊 {coin} OPEN TOUCH AFTER BREAKOUT\n"
-                                f"💰 Price: {price} USDT\n\n"
-                                f"📊 Prev Week Levels:\n"
-                                f"🟢 Open: {open_p}\n"
-                                f"🔼 High: {high}\n"
-                                f"🔽 Low: {low}\n"
-                                f"🔴 Close: {close}"
-                            )
+                        if abs(price - open_p)/open_p < 0.01:
+                            await send(f"📊 {coin} WEEKLY OPEN TOUCH")
                             state["oc"][key2] = True
 
-                        elif abs(price - close) / close < 0.01:
-                            await send(
-                                f"📊 {coin} CLOSE TOUCH AFTER BREAKOUT\n"
-                                f"💰 Price: {price} USDT\n\n"
-                                f"📊 Prev Week Levels:\n"
-                                f"🟢 Open: {open_p}\n"
-                                f"🔼 High: {high}\n"
-                                f"🔽 Low: {low}\n"
-                                f"🔴 Close: {close}"
-                            )
+                        elif abs(price - close)/close < 0.01:
+                            await send(f"📊 {coin} WEEKLY CLOSE TOUCH")
                             state["oc"][key2] = True
+
+                    # 🔹 DAILY
+                    d_open, d_high, d_low, d_close = get_daily_levels(coin)
+                    d_key1 = f"{coin}-{dk}-hl"
+                    d_key2 = f"{coin}-{dk}-oc"
+
+                    if not state["hl"].get(d_key1):
+
+                        if price >= d_high:
+                            await send(f"🟡 {coin} DAILY BREAKOUT\nPrice: {price}")
+                            state["hl"][d_key1] = True
+
+                        elif price <= d_low:
+                            await send(f"🟡 {coin} DAILY BREAKDOWN\nPrice: {price}")
+                            state["hl"][d_key1] = True
+
+                    if state["hl"].get(d_key1) and not state["oc"].get(d_key2):
+
+                        if abs(price - d_open)/d_open < 0.01:
+                            await send(f"📊 {coin} DAILY OPEN TOUCH")
+                            state["oc"][d_key2] = True
+
+                        elif abs(price - d_close)/d_close < 0.01:
+                            await send(f"📊 {coin} DAILY CLOSE TOUCH")
+                            state["oc"][d_key2] = True
 
                 except Exception as e:
                     print("Coin Error:", coin, e)
@@ -174,7 +151,7 @@ async def run_bot():
             print("Main Error:", e)
             await asyncio.sleep(10)
 
-# 🌐 Flask
+# 🌐 Flask (keep alive)
 app = Flask(__name__)
 
 @app.route("/")

@@ -13,7 +13,6 @@ CHAT_ID = os.getenv("CHAT_ID")
 
 bot = Bot(token=BOT_TOKEN)
 
-# 🔥 COINS
 COINS = [
 "BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT",
 "ADAUSDT","DOGEUSDT","TRXUSDT","LINKUSDT","MATICUSDT",
@@ -51,6 +50,12 @@ async def send(msg):
     except Exception as e:
         print("Telegram Error:", e)
 
+# 🔥 NEW 6H HEARTBEAT (ADDED ONLY)
+async def heartbeat_alert():
+    while True:
+        await send("🟢 BOT LIVE (6h check) ✅")
+        await asyncio.sleep(21600)
+
 def week_key():
     now = datetime.now(tz)
     return f"{now.year}-{now.isocalendar()[1]}"
@@ -59,7 +64,6 @@ def day_key():
     now = datetime.now(tz)
     return f"{now.year}-{now.month}-{now.day}"
 
-# 📊 API
 def get_price(symbol):
     url = f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={symbol}"
     return float(requests.get(url).json()["price"])
@@ -78,13 +82,11 @@ def get_daily_levels(symbol):
     prev = data[0]
     return float(prev[1]), float(prev[2]), float(prev[3]), float(prev[4])
 
-# 🚀 MAIN BOT
 async def run_bot():
-    await send("✅ Bot STARTED 🚀") 
-    async def heartbeat_alert():
-    while True:
-        await send("🟢 BOT LIVE (6h check) ✅")
-        await asyncio.sleep(21600)
+    await send("✅ Bot STARTED 🚀")
+
+    # 🔥 NEW LINE (ONLY ADD)
+    asyncio.create_task(heartbeat_alert())
 
     while True:
         try:
@@ -95,52 +97,42 @@ async def run_bot():
                 try:
                     price = get_price(coin)
 
-                    # 🔹 WEEKLY
                     open_p, high, low, close = get_weekly_levels(coin)
                     key1 = f"{coin}-{wk}-hl"
                     key2 = f"{coin}-{wk}-oc"
 
                     if not state["hl"].get(key1):
-
                         if price >= high:
                             await send(f"🚀 {coin} WEEKLY BREAKOUT\nPrice: {price}")
                             state["hl"][key1] = True
-
                         elif price <= low:
                             await send(f"🔻 {coin} WEEKLY BREAKDOWN\nPrice: {price}")
                             state["hl"][key1] = True
 
                     if state["hl"].get(key1) and not state["oc"].get(key2):
-
                         if abs(price - open_p)/open_p < 0.01:
                             await send(f"📊 {coin} WEEKLY OPEN TOUCH")
                             state["oc"][key2] = True
-
                         elif abs(price - close)/close < 0.01:
                             await send(f"📊 {coin} WEEKLY CLOSE TOUCH")
                             state["oc"][key2] = True
 
-                    # 🔹 DAILY
                     d_open, d_high, d_low, d_close = get_daily_levels(coin)
                     d_key1 = f"{coin}-{dk}-hl"
                     d_key2 = f"{coin}-{dk}-oc"
 
                     if not state["hl"].get(d_key1):
-
                         if price >= d_high:
                             await send(f"🟡 {coin} DAILY BREAKOUT\nPrice: {price}")
                             state["hl"][d_key1] = True
-
                         elif price <= d_low:
                             await send(f"🟡 {coin} DAILY BREAKDOWN\nPrice: {price}")
                             state["hl"][d_key1] = True
 
                     if state["hl"].get(d_key1) and not state["oc"].get(d_key2):
-
                         if abs(price - d_open)/d_open < 0.01:
                             await send(f"📊 {coin} DAILY OPEN TOUCH")
                             state["oc"][d_key2] = True
-
                         elif abs(price - d_close)/d_close < 0.01:
                             await send(f"📊 {coin} DAILY CLOSE TOUCH")
                             state["oc"][d_key2] = True
@@ -155,7 +147,6 @@ async def run_bot():
             print("Main Error:", e)
             await asyncio.sleep(10)
 
-# 🌐 Flask (keep alive)
 app = Flask(__name__)
 
 @app.route("/")
@@ -169,7 +160,6 @@ def ping():
 def run_web():
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
 
-# ▶️ START
 if __name__ == "__main__":
     threading.Thread(target=run_web).start()
     asyncio.run(run_bot())

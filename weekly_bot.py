@@ -80,7 +80,11 @@ def get_daily_levels(symbol):
 
 # 🚀 MAIN BOT
 async def run_bot():
-    await send("✅ Bot STARTED 🚀")
+    await send("✅ Bot STARTED 🚀") 
+    async def heartbeat_alert():
+    while True:
+        await send("🟢 BOT LIVE (6h check) ✅")
+        await asyncio.sleep(21600)
 
     while True:
         try:

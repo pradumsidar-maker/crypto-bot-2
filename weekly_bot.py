@@ -88,7 +88,75 @@ async def run_bot():
     # 🔥 NEW LINE (ONLY ADD)
     asyncio.create_task(heartbeat_alert())
 
-    while True:
+    while True:# 🔥 FULL HISTORY + MISSED ALERT SYSTEM (WEEKLY + DAILY)
+
+wk = week_key()
+dk = day_key()
+
+for coin in COINS:
+    try:
+        price = get_price(coin)
+
+        # ================= WEEKLY =================
+        w_open, w_high, w_low, w_close = get_weekly_levels(coin)
+
+        # current week candle
+        url = "https://fapi.binance.com/fapi/v1/klines"
+        params = {"symbol": coin, "interval": "1w", "limit": 1}
+        w_data = requests.get(url, params=params).json()[0]
+
+        week_high_now = float(w_data[2])
+        week_low_now = float(w_data[3])
+
+        w_key = f"{coin}-{wk}-history-w"
+
+        if not state["hl"].get(w_key):
+
+            if week_high_now >= w_high:
+                await send(f"🚨 {coin} TOUCHED PREV WEEK HIGH")
+
+            if week_low_now <= w_low:
+                await send(f"🚨 {coin} TOUCHED PREV WEEK LOW")
+
+            if week_low_now <= w_open <= week_high_now:
+                await send(f"🚨 {coin} TOUCHED PREV WEEK OPEN")
+
+            if week_low_now <= w_close <= week_high_now:
+                await send(f"🚨 {coin} TOUCHED PREV WEEK CLOSE")
+
+            state["hl"][w_key] = True
+
+
+        # ================= DAILY =================
+        d_open, d_high, d_low, d_close = get_daily_levels(coin)
+
+        # current day candle
+        params = {"symbol": coin, "interval": "1d", "limit": 1}
+        d_data = requests.get(url, params=params).json()[0]
+
+        today_high = float(d_data[2])
+        today_low = float(d_data[3])
+
+        d_key = f"{coin}-{dk}-history-d"
+
+        if not state["hl"].get(d_key):
+
+            if today_high >= d_high:
+                await send(f"🚨 {coin} TOUCHED PREV DAY HIGH")
+
+            if today_low <= d_low:
+                await send(f"🚨 {coin} TOUCHED PREV DAY LOW")
+
+            if today_low <= d_open <= today_high:
+                await send(f"🚨 {coin} TOUCHED PREV DAY OPEN")
+
+            if today_low <= d_close <= today_high:
+                await send(f"🚨 {coin} TOUCHED PREV DAY CLOSE")
+
+            state["hl"][d_key] = True
+
+    except Exception as e:
+        print("History Error:", coin, e)
         try:
             wk = week_key()
             dk = day_key()

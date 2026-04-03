@@ -29,7 +29,6 @@ COINS = [
 tz = pytz.timezone("Asia/Kolkata")
 
 STATE_FILE = "state.json"
-LAST_FILE = "last_run.txt"
 
 def load_state():
     if os.path.exists(STATE_FILE):
@@ -50,7 +49,7 @@ async def send(msg):
     except Exception as e:
         print("Telegram Error:", e)
 
-# 🔥 NEW 6H HEARTBEAT (ADDED ONLY)
+# 🔥 6H HEARTBEAT
 async def heartbeat_alert():
     while True:
         await send("🟢 BOT LIVE (6h check) ✅")
@@ -85,78 +84,63 @@ def get_daily_levels(symbol):
 async def run_bot():
     await send("✅ Bot STARTED 🚀")
 
-    # 🔥 NEW LINE (ONLY ADD)
     asyncio.create_task(heartbeat_alert())
 
-    while True:# 🔥 FULL HISTORY + MISSED ALERT SYSTEM (WEEKLY + DAILY)
+    # 🔥 HISTORY CHECK (NO MISS)
+    wk = week_key()
+    dk = day_key()
 
-wk = week_key()
-dk = day_key()
+    for coin in COINS:
+        try:
+            price = get_price(coin)
 
-for coin in COINS:
-    try:
-        price = get_price(coin)
+            # WEEKLY
+            w_open, w_high, w_low, w_close = get_weekly_levels(coin)
 
-        # ================= WEEKLY =================
-        w_open, w_high, w_low, w_close = get_weekly_levels(coin)
+            url = "https://fapi.binance.com/fapi/v1/klines"
 
-        # current week candle
-        url = "https://fapi.binance.com/fapi/v1/klines"
-        params = {"symbol": coin, "interval": "1w", "limit": 1}
-        w_data = requests.get(url, params=params).json()[0]
+            w_data = requests.get(url, params={"symbol": coin, "interval": "1w", "limit": 1}).json()[0]
+            week_high_now = float(w_data[2])
+            week_low_now = float(w_data[3])
 
-        week_high_now = float(w_data[2])
-        week_low_now = float(w_data[3])
+            w_key = f"{coin}-{wk}-history-w"
 
-        w_key = f"{coin}-{wk}-history-w"
+            if not state["hl"].get(w_key):
+                if week_high_now >= w_high:
+                    await send(f"🚨 {coin} TOUCHED PREV WEEK HIGH")
+                if week_low_now <= w_low:
+                    await send(f"🚨 {coin} TOUCHED PREV WEEK LOW")
+                if week_low_now <= w_open <= week_high_now:
+                    await send(f"🚨 {coin} TOUCHED PREV WEEK OPEN")
+                if week_low_now <= w_close <= week_high_now:
+                    await send(f"🚨 {coin} TOUCHED PREV WEEK CLOSE")
+                state["hl"][w_key] = True
 
-        if not state["hl"].get(w_key):
+            # DAILY
+            d_open, d_high, d_low, d_close = get_daily_levels(coin)
 
-            if week_high_now >= w_high:
-                await send(f"🚨 {coin} TOUCHED PREV WEEK HIGH")
+            d_data = requests.get(url, params={"symbol": coin, "interval": "1d", "limit": 1}).json()[0]
+            today_high = float(d_data[2])
+            today_low = float(d_data[3])
 
-            if week_low_now <= w_low:
-                await send(f"🚨 {coin} TOUCHED PREV WEEK LOW")
+            d_key = f"{coin}-{dk}-history-d"
 
-            if week_low_now <= w_open <= week_high_now:
-                await send(f"🚨 {coin} TOUCHED PREV WEEK OPEN")
+            if not state["hl"].get(d_key):
+                if today_high >= d_high:
+                    await send(f"🚨 {coin} TOUCHED PREV DAY HIGH")
+                if today_low <= d_low:
+                    await send(f"🚨 {coin} TOUCHED PREV DAY LOW")
+                if today_low <= d_open <= today_high:
+                    await send(f"🚨 {coin} TOUCHED PREV DAY OPEN")
+                if today_low <= d_close <= today_high:
+                    await send(f"🚨 {coin} TOUCHED PREV DAY CLOSE")
+                state["hl"][d_key] = True
 
-            if week_low_now <= w_close <= week_high_now:
-                await send(f"🚨 {coin} TOUCHED PREV WEEK CLOSE")
+        except Exception as e:
+            print("History Error:", coin, e)
 
-            state["hl"][w_key] = True
-
-
-        # ================= DAILY =================
-        d_open, d_high, d_low, d_close = get_daily_levels(coin)
-
-        # current day candle
-        params = {"symbol": coin, "interval": "1d", "limit": 1}
-        d_data = requests.get(url, params=params).json()[0]
-
-        today_high = float(d_data[2])
-        today_low = float(d_data[3])
-
-        d_key = f"{coin}-{dk}-history-d"
-
-        if not state["hl"].get(d_key):
-
-            if today_high >= d_high:
-                await send(f"🚨 {coin} TOUCHED PREV DAY HIGH")
-
-            if today_low <= d_low:
-                await send(f"🚨 {coin} TOUCHED PREV DAY LOW")
-
-            if today_low <= d_open <= today_high:
-                await send(f"🚨 {coin} TOUCHED PREV DAY OPEN")
-
-            if today_low <= d_close <= today_high:
-                await send(f"🚨 {coin} TOUCHED PREV DAY CLOSE")
-
-            state["hl"][d_key] = True
-
-    except Exception as e:
-        print("History Error:", coin, e)
+    # 🔥 ORIGINAL LOOP
+    while True:
         try:
             wk = week_key()
             dk = day_key()

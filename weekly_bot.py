@@ -101,7 +101,59 @@ def get_daily_levels(symbol):
 
 async def run_bot():
     await send("✅ Bot STARTED 🚀")
+    # ================= DAILY MISSED ALERT =================
 
+d_open, d_high, d_low, d_close = get_daily_levels(coin)
+
+d_data = requests.get(url, params={"symbol": coin, "interval": "1d", "limit": 1}).json()[0]
+
+today_high = float(d_data[2])
+today_low = float(d_data[3])
+
+d_key = f"{coin}-{dk}-history-d"
+
+if not state["hl"].get(d_key):
+
+    if today_high >= d_high:
+        await send(f"🚨 {coin} PREV DAY HIGH TOUCHED (missed)")
+
+    if today_low <= d_low:
+        await send(f"🚨 {coin} PREV DAY LOW TOUCHED (missed)")
+
+    if today_low <= d_open <= today_high:
+        await send(f"🚨 {coin} PREV DAY OPEN TOUCHED (missed)")
+
+    if today_low <= d_close <= today_high:
+        await send(f"🚨 {coin} PREV DAY CLOSE TOUCHED (missed)")
+
+    state["hl"][d_key] = True
+    
+# ================= DAILY MISSED ALERT =================
+
+d_open, d_high, d_low, d_close = get_daily_levels(coin)
+
+d_data = requests.get(url, params={"symbol": coin, "interval": "1d", "limit": 1}).json()[0]
+
+today_high = float(d_data[2])
+today_low = float(d_data[3])
+
+d_key = f"{coin}-{dk}-history-d"
+
+if not state["hl"].get(d_key):
+
+    if today_high >= d_high:
+        await send(f"🚨 {coin} PREV DAY HIGH TOUCHED (missed)")
+
+    if today_low <= d_low:
+        await send(f"🚨 {coin} PREV DAY LOW TOUCHED (missed)")
+
+    if today_low <= d_open <= today_high:
+        await send(f"🚨 {coin} PREV DAY OPEN TOUCHED (missed)")
+
+    if today_low <= d_close <= today_high:
+        await send(f"🚨 {coin} PREV DAY CLOSE TOUCHED (missed)")
+
+    state["hl"][d_key] = True
     asyncio.create_task(heartbeat_alert())
 
     # 🔥 RESET STATE

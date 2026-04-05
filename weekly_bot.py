@@ -56,33 +56,35 @@ def week_key():
     now = datetime.now(tz)
     return f"{now.year}-{now.isocalendar()[1]}"
 
-# 🔥 previous levels
+# 🔥 Previous levels
 def get_levels(symbol, interval):
     url = "https://fapi.binance.com/fapi/v1/klines"
     data = requests.get(url, params={"symbol": symbol, "interval": interval, "limit": 2}).json()
     prev = data[0]
     return float(prev[1]), float(prev[2]), float(prev[3]), float(prev[4])
 
-# 🔥 TODAY FULL RANGE (important)
-def get_today_range(symbol):
+# 🔥 Scan full day candles (FINAL FIX)
+def touched_today(symbol, level):
     url = "https://fapi.binance.com/fapi/v1/klines"
-    data = requests.get(url, params={"symbol": symbol, "interval": "1m", "limit": 1440}).json()
+    data = requests.get(url, params={
+        "symbol": symbol,
+        "interval": "5m",
+        "limit": 300
+    }).json()
 
-    highs = [float(x[2]) for x in data]
-    lows = [float(x[3]) for x in data]
+    for candle in data:
+        high = float(candle[2])
+        low = float(candle[3])
 
-    return max(highs), min(lows)
+        if low <= level <= high:
+            return True
 
-def touched(low, high, level):
-    return low <= level <= high
+    return False
 
 async def check_coin(coin):
     try:
         dk = day_key()
         wk = week_key()
-
-        # 🔥 FULL DAY RANGE (fix)
-        today_high, today_low = get_today_range(coin)
 
         # ===== DAILY =====
         d_open, d_high, d_low, d_close = get_levels(coin, "1d")
@@ -96,7 +98,8 @@ async def check_coin(coin):
 
         for name, lvl in levels_d.items():
             key = f"{coin}-{dk}-D-{name}"
-            if touched(today_low, today_high, lvl) and not state.get(key):
+
+            if touched_today(coin, lvl) and not state.get(key):
                 await send(f"🚨 {coin} DAILY {name} TOUCHED")
                 state[key] = True
 
@@ -112,7 +115,8 @@ async def check_coin(coin):
 
         for name, lvl in levels_w.items():
             key = f"{coin}-{wk}-W-{name}"
-            if touched(today_low, today_high, lvl) and not state.get(key):
+
+            if touched_today(coin, lvl) and not state.get(key):
                 await send(f"📊 {coin} WEEKLY {name} TOUCHED")
                 state[key] = True
 
@@ -128,7 +132,7 @@ async def run_bot():
         save_state(state)
         await asyncio.sleep(60)
 
-# Flask
+# 🌐 Flask
 app = Flask(__name__)
 
 @app.route("/")

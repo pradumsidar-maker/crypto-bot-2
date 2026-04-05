@@ -61,31 +61,30 @@ def week_key():
     now = datetime.now(tz)
     return f"{now.year}-{now.isocalendar()[1]}"
 
-# 🔥 GET PREVIOUS LEVELS
+# 🔥 previous levels
 def get_levels(symbol, interval):
     url = "https://fapi.binance.com/fapi/v1/klines"
     data = requests.get(url, params={"symbol": symbol, "interval": interval, "limit": 2}).json()
     prev = data[0]
     return float(prev[1]), float(prev[2]), float(prev[3]), float(prev[4])
 
-# 🔥 LIVE PRICE
-def get_price(symbol):
-    url = f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={symbol}"
-    return float(requests.get(url).json()["price"])
+# 🔥 current candle (WICK DATA)
+def get_current(symbol, interval):
+    url = "https://fapi.binance.com/fapi/v1/klines"
+    data = requests.get(url, params={"symbol": symbol, "interval": interval, "limit": 1}).json()[0]
+    return float(data[2]), float(data[3])  # high, low
 
-# 🔥 TOUCH LOGIC (0.2% tolerance)
-def touched(price, level):
-    return abs(price - level) / level < 0.002
+def touched(low, high, level):
+    return low <= level <= high
 
 async def check_coin(coin):
     try:
         dk = day_key()
         wk = week_key()
 
-        price = get_price(coin)
-
         # ===== DAILY =====
         d_open, d_high, d_low, d_close = get_levels(coin, "1d")
+        high, low = get_current(coin, "1d")
 
         levels_d = {
             "HIGH": d_high,
@@ -96,12 +95,13 @@ async def check_coin(coin):
 
         for name, lvl in levels_d.items():
             key = f"{coin}-{dk}-D-{name}"
-            if touched(price, lvl) and not state.get(key):
-                await send(f"🚨 {coin} DAILY {name} TOUCHED\nPrice: {price}")
+            if touched(low, high, lvl) and not state.get(key):
+                await send(f"🚨 {coin} DAILY {name} TOUCHED")
                 state[key] = True
 
         # ===== WEEKLY =====
         w_open, w_high, w_low, w_close = get_levels(coin, "1w")
+        wh, wl = get_current(coin, "1w")
 
         levels_w = {
             "HIGH": w_high,
@@ -112,8 +112,8 @@ async def check_coin(coin):
 
         for name, lvl in levels_w.items():
             key = f"{coin}-{wk}-W-{name}"
-            if touched(price, lvl) and not state.get(key):
-                await send(f"📊 {coin} WEEKLY {name} TOUCHED\nPrice: {price}")
+            if touched(wl, wh, lvl) and not state.get(key):
+                await send(f"📊 {coin} WEEKLY {name} TOUCHED")
                 state[key] = True
 
     except Exception as e:
@@ -121,16 +121,15 @@ async def check_coin(coin):
 
 async def run_bot():
     await send("🚀 BOT STARTED")
-
     asyncio.create_task(heartbeat())
 
     while True:
         tasks = [check_coin(c) for c in COINS]
         await asyncio.gather(*tasks)
         save_state(state)
-        await asyncio.sleep(30)   # 🔥 fast checking
+        await asyncio.sleep(30)
 
-# Flask
+# 🌐 Flask
 app = Flask(__name__)
 
 @app.route("/")

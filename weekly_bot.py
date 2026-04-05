@@ -41,24 +41,6 @@ def save_state(data):
 
 state = load_state()
 
-# 🔥 RESET DAILY
-def reset_state_if_new_day():
-    today = day_key()
-    new_hl = {}
-    new_oc = {}
-
-    for key in state["hl"]:
-        if today in key:
-            new_hl[key] = True
-
-    for key in state["oc"]:
-        if today in key:
-            new_oc[key] = True
-
-    state["hl"] = new_hl
-    state["oc"] = new_oc
-    save_state(state)
-
 async def send(msg):
     try:
         await bot.send_message(chat_id=CHAT_ID, text=msg)
@@ -66,7 +48,6 @@ async def send(msg):
     except Exception as e:
         print("Telegram Error:", e)
 
-# 🔥 6H HEARTBEAT
 async def heartbeat_alert():
     while True:
         await send("🟢 BOT LIVE (6h check) ✅")
@@ -96,12 +77,10 @@ async def run_bot():
     await send("✅ Bot STARTED 🚀")
     asyncio.create_task(heartbeat_alert())
 
-    reset_state_if_new_day()
-
     wk = week_key()
     dk = day_key()
 
-    # 🔥 MISSED ALERT CHECK
+    # 🔥 MISSED ALERT (TOUCH BASED)
     for coin in COINS:
         try:
             url = "https://fapi.binance.com/fapi/v1/klines"
@@ -117,10 +96,10 @@ async def run_bot():
 
             if not state["hl"].get(w_key):
 
-                if week_high_now >= w_high:
+                if week_low_now <= w_high <= week_high_now:
                     await send(f"🚨 {coin} PREV WEEK HIGH TOUCHED")
 
-                if week_low_now <= w_low:
+                if week_low_now <= w_low <= week_high_now:
                     await send(f"🚨 {coin} PREV WEEK LOW TOUCHED")
 
                 if week_low_now <= w_open <= week_high_now:
@@ -142,10 +121,10 @@ async def run_bot():
 
             if not state["hl"].get(d_key):
 
-                if today_high >= d_high:
+                if today_low <= d_high <= today_high:
                     await send(f"🚨 {coin} PREV DAY HIGH TOUCHED")
 
-                if today_low <= d_low:
+                if today_low <= d_low <= today_high:
                     await send(f"🚨 {coin} PREV DAY LOW TOUCHED")
 
                 if today_low <= d_open <= today_high:
@@ -180,10 +159,10 @@ async def run_bot():
 
                     if not state["hl"].get(key_w):
 
-                        if week_high_now >= w_high:
+                        if week_low_now <= w_high <= week_high_now:
                             await send(f"🚀 {coin} WEEKLY HIGH TOUCHED")
 
-                        if week_low_now <= w_low:
+                        if week_low_now <= w_low <= week_high_now:
                             await send(f"🔻 {coin} WEEKLY LOW TOUCHED")
 
                         if week_low_now <= w_open <= week_high_now:
@@ -205,10 +184,10 @@ async def run_bot():
 
                     if not state["hl"].get(key_d):
 
-                        if today_high >= d_high:
+                        if today_low <= d_high <= today_high:
                             await send(f"🚀 {coin} DAILY HIGH TOUCHED")
 
-                        if today_low <= d_low:
+                        if today_low <= d_low <= today_high:
                             await send(f"🔻 {coin} DAILY LOW TOUCHED")
 
                         if today_low <= d_open <= today_high:

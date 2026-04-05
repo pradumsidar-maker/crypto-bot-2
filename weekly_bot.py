@@ -48,11 +48,6 @@ async def send(msg):
     except Exception as e:
         print("Telegram Error:", e)
 
-async def heartbeat():
-    while True:
-        await send("🟢 BOT LIVE ✅")
-        await asyncio.sleep(21600)
-
 def day_key():
     now = datetime.now(tz)
     return f"{now.year}-{now.month}-{now.day}"
@@ -68,11 +63,15 @@ def get_levels(symbol, interval):
     prev = data[0]
     return float(prev[1]), float(prev[2]), float(prev[3]), float(prev[4])
 
-# 🔥 current candle (WICK DATA)
-def get_current(symbol, interval):
+# 🔥 TODAY FULL RANGE (important)
+def get_today_range(symbol):
     url = "https://fapi.binance.com/fapi/v1/klines"
-    data = requests.get(url, params={"symbol": symbol, "interval": interval, "limit": 1}).json()[0]
-    return float(data[2]), float(data[3])  # high, low
+    data = requests.get(url, params={"symbol": symbol, "interval": "1m", "limit": 1440}).json()
+
+    highs = [float(x[2]) for x in data]
+    lows = [float(x[3]) for x in data]
+
+    return max(highs), min(lows)
 
 def touched(low, high, level):
     return low <= level <= high
@@ -82,9 +81,11 @@ async def check_coin(coin):
         dk = day_key()
         wk = week_key()
 
+        # 🔥 FULL DAY RANGE (fix)
+        today_high, today_low = get_today_range(coin)
+
         # ===== DAILY =====
         d_open, d_high, d_low, d_close = get_levels(coin, "1d")
-        high, low = get_current(coin, "1d")
 
         levels_d = {
             "HIGH": d_high,
@@ -95,13 +96,12 @@ async def check_coin(coin):
 
         for name, lvl in levels_d.items():
             key = f"{coin}-{dk}-D-{name}"
-            if touched(low, high, lvl) and not state.get(key):
+            if touched(today_low, today_high, lvl) and not state.get(key):
                 await send(f"🚨 {coin} DAILY {name} TOUCHED")
                 state[key] = True
 
         # ===== WEEKLY =====
         w_open, w_high, w_low, w_close = get_levels(coin, "1w")
-        wh, wl = get_current(coin, "1w")
 
         levels_w = {
             "HIGH": w_high,
@@ -112,7 +112,7 @@ async def check_coin(coin):
 
         for name, lvl in levels_w.items():
             key = f"{coin}-{wk}-W-{name}"
-            if touched(wl, wh, lvl) and not state.get(key):
+            if touched(today_low, today_high, lvl) and not state.get(key):
                 await send(f"📊 {coin} WEEKLY {name} TOUCHED")
                 state[key] = True
 
@@ -121,15 +121,14 @@ async def check_coin(coin):
 
 async def run_bot():
     await send("🚀 BOT STARTED")
-    asyncio.create_task(heartbeat())
 
     while True:
         tasks = [check_coin(c) for c in COINS]
         await asyncio.gather(*tasks)
         save_state(state)
-        await asyncio.sleep(30)
+        await asyncio.sleep(60)
 
-# 🌐 Flask
+# Flask
 app = Flask(__name__)
 
 @app.route("/")

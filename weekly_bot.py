@@ -80,36 +80,28 @@ def day_key():
     now = datetime.now(tz)
     return f"{now.year}-{now.month}-{now.day}"
 
-def get_price(symbol):
-    url = f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={symbol}"
-    return float(requests.get(url).json()["price"])
-
 def get_weekly_levels(symbol):
     url = "https://fapi.binance.com/fapi/v1/klines"
-    params = {"symbol": symbol, "interval": "1w", "limit": 2}
-    data = requests.get(url, params=params).json()
+    data = requests.get(url, params={"symbol": symbol, "interval": "1w", "limit": 2}).json()
     prev = data[0]
     return float(prev[1]), float(prev[2]), float(prev[3]), float(prev[4])
 
 def get_daily_levels(symbol):
     url = "https://fapi.binance.com/fapi/v1/klines"
-    params = {"symbol": symbol, "interval": "1d", "limit": 2}
-    data = requests.get(url, params=params).json()
+    data = requests.get(url, params={"symbol": symbol, "interval": "1d", "limit": 2}).json()
     prev = data[0]
     return float(prev[1]), float(prev[2]), float(prev[3]), float(prev[4])
 
 async def run_bot():
     await send("✅ Bot STARTED 🚀")
-
     asyncio.create_task(heartbeat_alert())
 
-    # 🔥 RESET
     reset_state_if_new_day()
 
-    # 🔥 MISSED ALERT SYSTEM (DAILY + WEEKLY)
     wk = week_key()
     dk = day_key()
 
+    # 🔥 MISSED ALERT CHECK
     for coin in COINS:
         try:
             url = "https://fapi.binance.com/fapi/v1/klines"
@@ -121,7 +113,7 @@ async def run_bot():
             week_high_now = float(w_data[2])
             week_low_now = float(w_data[3])
 
-            w_key = f"{coin}-{wk}-history-w"
+            w_key = f"{coin}-{wk}-w"
 
             if not state["hl"].get(w_key):
 
@@ -132,10 +124,10 @@ async def run_bot():
                     await send(f"🚨 {coin} PREV WEEK LOW TOUCHED")
 
                 if week_low_now <= w_open <= week_high_now:
-                    await send(f"🚨 {coin} PREV WEEK OPEN TOUCHED")
+                    await send(f"📊 {coin} PREV WEEK OPEN TOUCHED")
 
                 if week_low_now <= w_close <= week_high_now:
-                    await send(f"🚨 {coin} PREV WEEK CLOSE TOUCHED")
+                    await send(f"📊 {coin} PREV WEEK CLOSE TOUCHED")
 
                 state["hl"][w_key] = True
 
@@ -146,7 +138,7 @@ async def run_bot():
             today_high = float(d_data[2])
             today_low = float(d_data[3])
 
-            d_key = f"{coin}-{dk}-history-d"
+            d_key = f"{coin}-{dk}-d"
 
             if not state["hl"].get(d_key):
 
@@ -157,17 +149,17 @@ async def run_bot():
                     await send(f"🚨 {coin} PREV DAY LOW TOUCHED")
 
                 if today_low <= d_open <= today_high:
-                    await send(f"🚨 {coin} PREV DAY OPEN TOUCHED")
+                    await send(f"📊 {coin} PREV DAY OPEN TOUCHED")
 
                 if today_low <= d_close <= today_high:
-                    await send(f"🚨 {coin} PREV DAY CLOSE TOUCHED")
+                    await send(f"📊 {coin} PREV DAY CLOSE TOUCHED")
 
                 state["hl"][d_key] = True
 
         except Exception as e:
             print("History Error:", coin, e)
 
-    # 🔥 NORMAL LOOP
+    # 🔥 MAIN LOOP
     while True:
         try:
             wk = week_key()
@@ -175,47 +167,57 @@ async def run_bot():
 
             for coin in COINS:
                 try:
-                    price = get_price(coin)
+                    url = "https://fapi.binance.com/fapi/v1/klines"
 
-                    open_p, high, low, close = get_weekly_levels(coin)
-                    key1 = f"{coin}-{wk}-hl"
-                    key2 = f"{coin}-{wk}-oc"
+                    # ===== WEEKLY =====
+                    w_open, w_high, w_low, w_close = get_weekly_levels(coin)
+                    w_data = requests.get(url, params={"symbol": coin, "interval": "1w", "limit": 1}).json()[0]
 
-                    if not state["hl"].get(key1):
-                        if price >= high:
-                            await send(f"🚀 {coin} WEEKLY BREAKOUT")
-                            state["hl"][key1] = True
-                        elif price <= low:
-                            await send(f"🔻 {coin} WEEKLY BREAKDOWN")
-                            state["hl"][key1] = True
+                    week_high_now = float(w_data[2])
+                    week_low_now = float(w_data[3])
 
-                    if state["hl"].get(key1) and not state["oc"].get(key2):
-                        if abs(price - open_p)/open_p < 0.01:
-                            await send(f"📊 {coin} WEEKLY OPEN TOUCH")
-                            state["oc"][key2] = True
-                        elif abs(price - close)/close < 0.01:
-                            await send(f"📊 {coin} WEEKLY CLOSE TOUCH")
-                            state["oc"][key2] = True
+                    key_w = f"{coin}-{wk}-touch"
 
+                    if not state["hl"].get(key_w):
+
+                        if week_high_now >= w_high:
+                            await send(f"🚀 {coin} WEEKLY HIGH TOUCHED")
+
+                        if week_low_now <= w_low:
+                            await send(f"🔻 {coin} WEEKLY LOW TOUCHED")
+
+                        if week_low_now <= w_open <= week_high_now:
+                            await send(f"📊 {coin} WEEKLY OPEN TOUCHED")
+
+                        if week_low_now <= w_close <= week_high_now:
+                            await send(f"📊 {coin} WEEKLY CLOSE TOUCHED")
+
+                        state["hl"][key_w] = True
+
+                    # ===== DAILY =====
                     d_open, d_high, d_low, d_close = get_daily_levels(coin)
-                    d_key1 = f"{coin}-{dk}-hl"
-                    d_key2 = f"{coin}-{dk}-oc"
+                    d_data = requests.get(url, params={"symbol": coin, "interval": "1d", "limit": 1}).json()[0]
 
-                    if not state["hl"].get(d_key1):
-                        if price >= d_high:
-                            await send(f"🟡 {coin} DAILY BREAKOUT")
-                            state["hl"][d_key1] = True
-                        elif price <= d_low:
-                            await send(f"🟡 {coin} DAILY BREAKDOWN")
-                            state["hl"][d_key1] = True
+                    today_high = float(d_data[2])
+                    today_low = float(d_data[3])
 
-                    if state["hl"].get(d_key1) and not state["oc"].get(d_key2):
-                        if abs(price - d_open)/d_open < 0.01:
-                            await send(f"📊 {coin} DAILY OPEN TOUCH")
-                            state["oc"][d_key2] = True
-                        elif abs(price - d_close)/d_close < 0.01:
-                            await send(f"📊 {coin} DAILY CLOSE TOUCH")
-                            state["oc"][d_key2] = True
+                    key_d = f"{coin}-{dk}-touch"
+
+                    if not state["hl"].get(key_d):
+
+                        if today_high >= d_high:
+                            await send(f"🚀 {coin} DAILY HIGH TOUCHED")
+
+                        if today_low <= d_low:
+                            await send(f"🔻 {coin} DAILY LOW TOUCHED")
+
+                        if today_low <= d_open <= today_high:
+                            await send(f"📊 {coin} DAILY OPEN TOUCHED")
+
+                        if today_low <= d_close <= today_high:
+                            await send(f"📊 {coin} DAILY CLOSE TOUCHED")
+
+                        state["hl"][key_d] = True
 
                 except Exception as e:
                     print("Coin Error:", coin, e)
@@ -227,6 +229,7 @@ async def run_bot():
             print("Main Error:", e)
             await asyncio.sleep(10)
 
+# 🌐 Flask
 app = Flask(__name__)
 
 @app.route("/")

@@ -41,7 +41,7 @@ def save_state(data):
 
 state = load_state()
 
-# 🔥 RESET DAILY (NO REPEAT, NO MISS)
+# 🔥 RESET DAILY
 def reset_state_if_new_day():
     today = day_key()
     new_hl = {}
@@ -57,7 +57,6 @@ def reset_state_if_new_day():
 
     state["hl"] = new_hl
     state["oc"] = new_oc
-
     save_state(state)
 
 async def send(msg):
@@ -101,117 +100,74 @@ def get_daily_levels(symbol):
 
 async def run_bot():
     await send("✅ Bot STARTED 🚀")
-    # ================= DAILY MISSED ALERT =================
 
-d_open, d_high, d_low, d_close = get_daily_levels(coin)
-
-d_data = requests.get(url, params={"symbol": coin, "interval": "1d", "limit": 1}).json()[0]
-
-today_high = float(d_data[2])
-today_low = float(d_data[3])
-
-d_key = f"{coin}-{dk}-history-d"
-
-if not state["hl"].get(d_key):
-
-    if today_high >= d_high:
-        await send(f"🚨 {coin} PREV DAY HIGH TOUCHED (missed)")
-
-    if today_low <= d_low:
-        await send(f"🚨 {coin} PREV DAY LOW TOUCHED (missed)")
-
-    if today_low <= d_open <= today_high:
-        await send(f"🚨 {coin} PREV DAY OPEN TOUCHED (missed)")
-
-    if today_low <= d_close <= today_high:
-        await send(f"🚨 {coin} PREV DAY CLOSE TOUCHED (missed)")
-
-    state["hl"][d_key] = True
-    
-# ================= DAILY MISSED ALERT =================
-
-d_open, d_high, d_low, d_close = get_daily_levels(coin)
-
-d_data = requests.get(url, params={"symbol": coin, "interval": "1d", "limit": 1}).json()[0]
-
-today_high = float(d_data[2])
-today_low = float(d_data[3])
-
-d_key = f"{coin}-{dk}-history-d"
-
-if not state["hl"].get(d_key):
-
-    if today_high >= d_high:
-        await send(f"🚨 {coin} PREV DAY HIGH TOUCHED (missed)")
-
-    if today_low <= d_low:
-        await send(f"🚨 {coin} PREV DAY LOW TOUCHED (missed)")
-
-    if today_low <= d_open <= today_high:
-        await send(f"🚨 {coin} PREV DAY OPEN TOUCHED (missed)")
-
-    if today_low <= d_close <= today_high:
-        await send(f"🚨 {coin} PREV DAY CLOSE TOUCHED (missed)")
-
-    state["hl"][d_key] = True
     asyncio.create_task(heartbeat_alert())
 
-    # 🔥 RESET STATE
+    # 🔥 RESET
     reset_state_if_new_day()
 
-    # 🔥 HISTORY CHECK (NO MISS)
+    # 🔥 MISSED ALERT SYSTEM (DAILY + WEEKLY)
     wk = week_key()
     dk = day_key()
 
     for coin in COINS:
         try:
-            price = get_price(coin)
             url = "https://fapi.binance.com/fapi/v1/klines"
 
-            # WEEKLY
+            # ===== WEEKLY =====
             w_open, w_high, w_low, w_close = get_weekly_levels(coin)
             w_data = requests.get(url, params={"symbol": coin, "interval": "1w", "limit": 1}).json()[0]
+
             week_high_now = float(w_data[2])
             week_low_now = float(w_data[3])
 
             w_key = f"{coin}-{wk}-history-w"
 
             if not state["hl"].get(w_key):
-                if price >= w_high * 0.998 or week_high_now >= w_high:
-                    await send(f"🚨 {coin} TOUCHED PREV WEEK HIGH")
-                if price <= w_low * 1.002 or week_low_now <= w_low:
-                    await send(f"🚨 {coin} TOUCHED PREV WEEK LOW")
+
+                if week_high_now >= w_high:
+                    await send(f"🚨 {coin} PREV WEEK HIGH TOUCHED")
+
+                if week_low_now <= w_low:
+                    await send(f"🚨 {coin} PREV WEEK LOW TOUCHED")
+
                 if week_low_now <= w_open <= week_high_now:
-                    await send(f"🚨 {coin} TOUCHED PREV WEEK OPEN")
+                    await send(f"🚨 {coin} PREV WEEK OPEN TOUCHED")
+
                 if week_low_now <= w_close <= week_high_now:
-                    await send(f"🚨 {coin} TOUCHED PREV WEEK CLOSE")
+                    await send(f"🚨 {coin} PREV WEEK CLOSE TOUCHED")
 
                 state["hl"][w_key] = True
 
-            # DAILY
+            # ===== DAILY =====
             d_open, d_high, d_low, d_close = get_daily_levels(coin)
             d_data = requests.get(url, params={"symbol": coin, "interval": "1d", "limit": 1}).json()[0]
+
             today_high = float(d_data[2])
             today_low = float(d_data[3])
 
             d_key = f"{coin}-{dk}-history-d"
 
             if not state["hl"].get(d_key):
-                if price >= d_high * 0.998 or today_high >= d_high:
-                    await send(f"🚨 {coin} TOUCHED PREV DAY HIGH")
-                if price <= d_low * 1.002 or today_low <= d_low:
-                    await send(f"🚨 {coin} TOUCHED PREV DAY LOW")
+
+                if today_high >= d_high:
+                    await send(f"🚨 {coin} PREV DAY HIGH TOUCHED")
+
+                if today_low <= d_low:
+                    await send(f"🚨 {coin} PREV DAY LOW TOUCHED")
+
                 if today_low <= d_open <= today_high:
-                    await send(f"🚨 {coin} TOUCHED PREV DAY OPEN")
+                    await send(f"🚨 {coin} PREV DAY OPEN TOUCHED")
+
                 if today_low <= d_close <= today_high:
-                    await send(f"🚨 {coin} TOUCHED PREV DAY CLOSE")
+                    await send(f"🚨 {coin} PREV DAY CLOSE TOUCHED")
 
                 state["hl"][d_key] = True
 
         except Exception as e:
             print("History Error:", coin, e)
 
-    # 🔥 ORIGINAL LOOP
+    # 🔥 NORMAL LOOP
     while True:
         try:
             wk = week_key()
@@ -227,10 +183,10 @@ if not state["hl"].get(d_key):
 
                     if not state["hl"].get(key1):
                         if price >= high:
-                            await send(f"🚀 {coin} WEEKLY BREAKOUT\nPrice: {price}")
+                            await send(f"🚀 {coin} WEEKLY BREAKOUT")
                             state["hl"][key1] = True
                         elif price <= low:
-                            await send(f"🔻 {coin} WEEKLY BREAKDOWN\nPrice: {price}")
+                            await send(f"🔻 {coin} WEEKLY BREAKDOWN")
                             state["hl"][key1] = True
 
                     if state["hl"].get(key1) and not state["oc"].get(key2):
@@ -247,10 +203,10 @@ if not state["hl"].get(d_key):
 
                     if not state["hl"].get(d_key1):
                         if price >= d_high:
-                            await send(f"🟡 {coin} DAILY BREAKOUT\nPrice: {price}")
+                            await send(f"🟡 {coin} DAILY BREAKOUT")
                             state["hl"][d_key1] = True
                         elif price <= d_low:
-                            await send(f"🟡 {coin} DAILY BREAKDOWN\nPrice: {price}")
+                            await send(f"🟡 {coin} DAILY BREAKDOWN")
                             state["hl"][d_key1] = True
 
                     if state["hl"].get(d_key1) and not state["oc"].get(d_key2):

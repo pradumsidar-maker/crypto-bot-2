@@ -4,13 +4,22 @@ import requests
 import json
 from datetime import datetime
 import pytz
-from telegram import Bot
+from flask import Flask
+import threading
+import telegram
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-bot = Bot(token=BOT_TOKEN)
+bot = telegram.Bot(token=BOT_TOKEN)
 
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Bot Running 🚀"
+
+# ===== COINS =====
 COINS = [
 "BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT",
 "ADAUSDT","DOGEUSDT","TRXUSDT","LINKUSDT","MATICUSDT",
@@ -48,7 +57,7 @@ def send(msg):
     except Exception as e:
         print("Telegram Error:", e)
 
-# ===== KEYS =====
+# ===== TIME KEYS =====
 def day_key():
     now = datetime.now(tz)
     return f"{now.year}-{now.month}-{now.day}"
@@ -64,20 +73,13 @@ def get_levels(symbol, interval):
     prev = data[0]
     return float(prev[1]), float(prev[2]), float(prev[3]), float(prev[4])
 
-# ===== TODAY TOUCH CHECK (🔥 FINAL FIX) =====
+# ===== TODAY RANGE CHECK =====
 def touched_today(symbol, level):
     url = "https://fapi.binance.com/fapi/v1/klines"
-
-    data = requests.get(url, params={
-        "symbol": symbol,
-        "interval": "1d",
-        "limit": 1
-    }).json()
-
+    data = requests.get(url, params={"symbol": symbol, "interval": "1d", "limit": 1}).json()
     today = data[0]
     high = float(today[2])
     low = float(today[3])
-
     return low <= level <= high
 
 # ===== CHECK =====
@@ -91,14 +93,14 @@ def check_coin(symbol):
         # ===== DAILY =====
         d_open, d_high, d_low, d_close = get_levels(symbol, "1d")
 
-        levels_d = {
+        daily_levels = {
             "HIGH": d_high,
             "LOW": d_low,
             "OPEN": d_open,
             "CLOSE": d_close
         }
 
-        for name, lvl in levels_d.items():
+        for name, lvl in daily_levels.items():
             key = f"{symbol}-{dk}-D-{name}"
 
             if touched_today(symbol, lvl):
@@ -111,14 +113,14 @@ def check_coin(symbol):
         # ===== WEEKLY =====
         w_open, w_high, w_low, w_close = get_levels(symbol, "1w")
 
-        levels_w = {
+        weekly_levels = {
             "HIGH": w_high,
             "LOW": w_low,
             "OPEN": w_open,
             "CLOSE": w_close
         }
 
-        for name, lvl in levels_w.items():
+        for name, lvl in weekly_levels.items():
             key = f"{symbol}-{wk}-W-{name}"
 
             if touched_today(symbol, lvl):
@@ -131,11 +133,10 @@ def check_coin(symbol):
     except Exception as e:
         print("Error:", symbol, e)
 
-# ===== MAIN LOOP =====
+# ===== BOT LOOP =====
 def run_bot():
     send("🚀 BOT STARTED")
-    send("🔥 TEST MESSAGE")
-    send("🟢 BOT LIVE (6H) ✅")
+    send("🟢 BOT LIVE")
 
     while True:
         print("🔄 Checking all coins...")
@@ -144,9 +145,12 @@ def run_bot():
             check_coin(coin)
 
         save_state(state)
+        time.sleep(60)
 
-        time.sleep(60)  # 1 min loop
+# ===== RUN =====
+def start():
+    threading.Thread(target=run_bot).start()
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
 
-# ===== START =====
 if __name__ == "__main__":
-    run_bot()
+    start()

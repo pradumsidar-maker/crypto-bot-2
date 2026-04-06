@@ -48,6 +48,12 @@ async def send(msg):
     except Exception as e:
         print("Telegram Error:", e)
 
+# 🟢 6H LIVE ALERT
+async def heartbeat():
+    while True:
+        await send("🟢 BOT LIVE (6H) ✅")
+        await asyncio.sleep(21600)
+
 def day_key():
     now = datetime.now(tz)
     return f"{now.year}-{now.month}-{now.day}"
@@ -63,16 +69,24 @@ def get_levels(symbol, interval):
     prev = data[0]
     return float(prev[1]), float(prev[2]), float(prev[3]), float(prev[4])
 
-# 🔥 Scan full day candles (FINAL FIX)
+# 🔥 TODAY SCAN (past + present)
 def touched_today(symbol, level):
     url = "https://fapi.binance.com/fapi/v1/klines"
+
     data = requests.get(url, params={
         "symbol": symbol,
         "interval": "5m",
-        "limit": 300
+        "limit": 500
     }).json()
 
+    today = datetime.now(tz).date()
+
     for candle in data:
+        candle_time = datetime.fromtimestamp(candle[0] / 1000, pytz.utc).astimezone(tz).date()
+
+        if candle_time != today:
+            continue
+
         high = float(candle[2])
         low = float(candle[3])
 
@@ -100,7 +114,7 @@ async def check_coin(coin):
             key = f"{coin}-{dk}-D-{name}"
 
             if touched_today(coin, lvl) and not state.get(key):
-                await send(f"🚨 {coin} DAILY {name} TOUCHED")
+                await send(f"🚨 {coin} DAILY {name} TOUCHED ({lvl})")
                 state[key] = True
 
         # ===== WEEKLY =====
@@ -117,7 +131,7 @@ async def check_coin(coin):
             key = f"{coin}-{wk}-W-{name}"
 
             if touched_today(coin, lvl) and not state.get(key):
-                await send(f"📊 {coin} WEEKLY {name} TOUCHED")
+                await send(f"📊 {coin} WEEKLY {name} TOUCHED ({lvl})")
                 state[key] = True
 
     except Exception as e:
@@ -126,6 +140,15 @@ async def check_coin(coin):
 async def run_bot():
     await send("🚀 BOT STARTED")
 
+    # 🟢 start heartbeat
+    asyncio.create_task(heartbeat())
+
+    # 🔥 FIRST RUN (missed alerts instantly)
+    tasks = [check_coin(c) for c in COINS]
+    await asyncio.gather(*tasks)
+    save_state(state)
+
+    # 🔁 LOOP
     while True:
         tasks = [check_coin(c) for c in COINS]
         await asyncio.gather(*tasks)

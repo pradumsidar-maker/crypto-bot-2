@@ -6,18 +6,24 @@ from datetime import datetime
 import pytz
 from flask import Flask
 import threading
-import telegram
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
-
-bot = telegram.Bot(token=BOT_TOKEN)
 
 app = Flask(__name__)
 
 @app.route("/")
 def home():
     return "Bot Running 🚀"
+
+# ===== TELEGRAM (NO ERROR) =====
+def send(msg):
+    try:
+        print("Sending:", msg)
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        requests.get(url, params={"chat_id": CHAT_ID, "text": msg})
+    except Exception as e:
+        print("Telegram Error:", e)
 
 # ===== COINS =====
 COINS = [
@@ -49,15 +55,7 @@ def save_state(data):
 
 state = load_state()
 
-# ===== TELEGRAM =====
-def send(msg):
-    try:
-        print("Sending:", msg)
-        bot.send_message(chat_id=CHAT_ID, text=msg)
-    except Exception as e:
-        print("Telegram Error:", e)
-
-# ===== TIME KEYS =====
+# ===== TIME =====
 def day_key():
     now = datetime.now(tz)
     return f"{now.year}-{now.month}-{now.day}"
@@ -73,7 +71,7 @@ def get_levels(symbol, interval):
     prev = data[0]
     return float(prev[1]), float(prev[2]), float(prev[3]), float(prev[4])
 
-# ===== TODAY RANGE CHECK =====
+# ===== TODAY TOUCH =====
 def touched_today(symbol, level):
     url = "https://fapi.binance.com/fapi/v1/klines"
     data = requests.get(url, params={"symbol": symbol, "interval": "1d", "limit": 1}).json()
@@ -104,7 +102,7 @@ def check_coin(symbol):
             key = f"{symbol}-{dk}-D-{name}"
 
             if touched_today(symbol, lvl):
-                print(f"🔥 DAILY TOUCH {symbol} {name} {lvl}")
+                print(f"🔥 DAILY TOUCH {symbol} {name}")
 
                 if not state.get(key):
                     send(f"🚨 {symbol} DAILY {name} TOUCH ({lvl})")
@@ -124,7 +122,7 @@ def check_coin(symbol):
             key = f"{symbol}-{wk}-W-{name}"
 
             if touched_today(symbol, lvl):
-                print(f"📊 WEEKLY TOUCH {symbol} {name} {lvl}")
+                print(f"📊 WEEKLY TOUCH {symbol} {name}")
 
                 if not state.get(key):
                     send(f"📊 {symbol} WEEKLY {name} TOUCH ({lvl})")
@@ -135,6 +133,8 @@ def check_coin(symbol):
 
 # ===== BOT LOOP =====
 def run_bot():
+    time.sleep(5)
+
     send("🚀 BOT STARTED")
     send("🟢 BOT LIVE")
 
@@ -150,7 +150,7 @@ def run_bot():
 # ===== RUN =====
 def start():
     threading.Thread(target=run_bot).start()
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+    app.run(host="0.0.0.0", port=10000)
 
 if __name__ == "__main__":
     start()

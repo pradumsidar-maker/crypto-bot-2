@@ -43,6 +43,7 @@ state = load_state()
 
 async def send(msg):
     try:
+        print("Sending:", msg)
         await bot.send_message(chat_id=CHAT_ID, text=msg)
         await asyncio.sleep(1)
     except Exception as e:
@@ -79,7 +80,7 @@ def is_touch(price, level):
     tolerance = level * 0.001
     return abs(price - level) <= tolerance
 
-# 🔥 Past touch (TODAY)
+# 🔥 Past touch
 def touched_today(symbol, level):
     url = "https://fapi.binance.com/fapi/v1/klines"
 
@@ -110,6 +111,7 @@ async def check_coin(coin):
         wk = week_key()
 
         price = get_price(coin)
+        print(f"Checking {coin} | Price: {price}")
 
         # ===== DAILY =====
         d_open, d_high, d_low, d_close = get_levels(coin, "1d")
@@ -124,10 +126,12 @@ async def check_coin(coin):
         for name, lvl in levels_d.items():
             key = f"{coin}-{dk}-D-{name}"
 
-            # 🔥 PAST + LIVE
-            if (touched_today(coin, lvl) or is_touch(price, lvl)) and not state.get(key):
-                await send(f"🚨 {coin} DAILY {name} TOUCH ({lvl})")
-                state[key] = True
+            if (touched_today(coin, lvl) or is_touch(price, lvl)):
+                print(f"TOUCH DETECTED {coin} DAILY {name} {lvl}")
+
+                if not state.get(key):
+                    await send(f"🚨 {coin} DAILY {name} TOUCH ({lvl})")
+                    state[key] = True
 
         # ===== WEEKLY =====
         w_open, w_high, w_low, w_close = get_levels(coin, "1w")
@@ -142,18 +146,23 @@ async def check_coin(coin):
         for name, lvl in levels_w.items():
             key = f"{coin}-{wk}-W-{name}"
 
-            if (touched_today(coin, lvl) or is_touch(price, lvl)) and not state.get(key):
-                await send(f"📊 {coin} WEEKLY {name} TOUCH ({lvl})")
-                state[key] = True
+            if (touched_today(coin, lvl) or is_touch(price, lvl)):
+                print(f"TOUCH DETECTED {coin} WEEKLY {name} {lvl}")
+
+                if not state.get(key):
+                    await send(f"📊 {coin} WEEKLY {name} TOUCH ({lvl})")
+                    state[key] = True
 
     except Exception as e:
         print("Error:", coin, e)
 
 async def run_bot():
     await send("🚀 BOT STARTED")
+    await send("🔥 TEST MESSAGE")  # 👈 test
+
     asyncio.create_task(heartbeat())
 
-    # 🔥 FIRST RUN (past alerts)
+    # 🔥 FIRST RUN
     tasks = [check_coin(c) for c in COINS]
     await asyncio.gather(*tasks)
     save_state(state)

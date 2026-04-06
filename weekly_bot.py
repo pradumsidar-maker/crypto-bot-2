@@ -1,11 +1,9 @@
 import os
-import threading
-import asyncio
+import time
 import requests
 import json
 from datetime import datetime
 import pytz
-from flask import Flask
 from telegram import Bot
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -29,6 +27,7 @@ COINS = [
 tz = pytz.timezone("Asia/Kolkata")
 STATE_FILE = "state.json"
 
+# ===== STATE =====
 def load_state():
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE, "r") as f:
@@ -41,20 +40,15 @@ def save_state(data):
 
 state = load_state()
 
-async def send(msg):
+# ===== TELEGRAM =====
+def send(msg):
     try:
         print("Sending:", msg)
-        await bot.send_message(chat_id=CHAT_ID, text=msg)
-        await asyncio.sleep(1)
+        bot.send_message(chat_id=CHAT_ID, text=msg)
     except Exception as e:
         print("Telegram Error:", e)
 
-# 🟢 BOT LIVE
-async def heartbeat():
-    while True:
-        await send("🟢 BOT LIVE (6H) ✅")
-        await asyncio.sleep(21600)
-
+# ===== KEYS =====
 def day_key():
     now = datetime.now(tz)
     return f"{now.year}-{now.month}-{now.day}"
@@ -63,58 +57,39 @@ def week_key():
     now = datetime.now(tz)
     return f"{now.year}-{now.isocalendar()[1]}"
 
-# 🔥 Levels
+# ===== LEVELS =====
 def get_levels(symbol, interval):
     url = "https://fapi.binance.com/fapi/v1/klines"
     data = requests.get(url, params={"symbol": symbol, "interval": interval, "limit": 2}).json()
     prev = data[0]
     return float(prev[1]), float(prev[2]), float(prev[3]), float(prev[4])
 
-# 🔥 Live price
-def get_price(symbol):
-    url = "https://fapi.binance.com/fapi/v1/ticker/price"
-    return float(requests.get(url, params={"symbol": symbol}).json()["price"])
-
-# 🔥 Live touch
-def is_touch(price, level):
-    tolerance = level * 0.001
-    return abs(price - level) <= tolerance
-
-# 🔥 Past touch
+# ===== TODAY TOUCH CHECK (🔥 FINAL FIX) =====
 def touched_today(symbol, level):
     url = "https://fapi.binance.com/fapi/v1/klines"
 
     data = requests.get(url, params={
         "symbol": symbol,
-        "interval": "1m",
-        "limit": 1000
+        "interval": "1d",
+        "limit": 1
     }).json()
 
-    today = datetime.now(tz).date()
+    today = data[0]
+    high = float(today[2])
+    low = float(today[3])
 
-    for c in data:
-        t = datetime.fromtimestamp(c[0]/1000, pytz.utc).astimezone(tz).date()
-        if t != today:
-            continue
+    return low <= level <= high
 
-        high = float(c[2])
-        low = float(c[3])
-
-        if low <= level <= high:
-            return True
-
-    return False
-
-async def check_coin(coin):
+# ===== CHECK =====
+def check_coin(symbol):
     try:
+        print(f"Checking {symbol}")
+
         dk = day_key()
         wk = week_key()
 
-        price = get_price(coin)
-        print(f"Checking {coin} | Price: {price}")
-
         # ===== DAILY =====
-        d_open, d_high, d_low, d_close = get_levels(coin, "1d")
+        d_open, d_high, d_low, d_close = get_levels(symbol, "1d")
 
         levels_d = {
             "HIGH": d_high,
@@ -124,17 +99,17 @@ async def check_coin(coin):
         }
 
         for name, lvl in levels_d.items():
-            key = f"{coin}-{dk}-D-{name}"
+            key = f"{symbol}-{dk}-D-{name}"
 
-            if (touched_today(coin, lvl) or is_touch(price, lvl)):
-                print(f"TOUCH DETECTED {coin} DAILY {name} {lvl}")
+            if touched_today(symbol, lvl):
+                print(f"🔥 DAILY TOUCH {symbol} {name} {lvl}")
 
                 if not state.get(key):
-                    await send(f"🚨 {coin} DAILY {name} TOUCH ({lvl})")
+                    send(f"🚨 {symbol} DAILY {name} TOUCH ({lvl})")
                     state[key] = True
 
         # ===== WEEKLY =====
-        w_open, w_high, w_low, w_close = get_levels(coin, "1w")
+        w_open, w_high, w_low, w_close = get_levels(symbol, "1w")
 
         levels_w = {
             "HIGH": w_high,
@@ -144,45 +119,34 @@ async def check_coin(coin):
         }
 
         for name, lvl in levels_w.items():
-            key = f"{coin}-{wk}-W-{name}"
+            key = f"{symbol}-{wk}-W-{name}"
 
-            if (touched_today(coin, lvl) or is_touch(price, lvl)):
-                print(f"TOUCH DETECTED {coin} WEEKLY {name} {lvl}")
+            if touched_today(symbol, lvl):
+                print(f"📊 WEEKLY TOUCH {symbol} {name} {lvl}")
 
                 if not state.get(key):
-                    await send(f"📊 {coin} WEEKLY {name} TOUCH ({lvl})")
+                    send(f"📊 {symbol} WEEKLY {name} TOUCH ({lvl})")
                     state[key] = True
 
     except Exception as e:
-        print("Error:", coin, e)
+        print("Error:", symbol, e)
 
-async def run_bot():
-    await send("🚀 BOT STARTED")
-    await send("🔥 TEST MESSAGE")  # 👈 test
-
-    asyncio.create_task(heartbeat())
-
-    # 🔥 FIRST RUN
-    tasks = [check_coin(c) for c in COINS]
-    await asyncio.gather(*tasks)
-    save_state(state)
+# ===== MAIN LOOP =====
+def run_bot():
+    send("🚀 BOT STARTED")
+    send("🔥 TEST MESSAGE")
+    send("🟢 BOT LIVE (6H) ✅")
 
     while True:
-        tasks = [check_coin(c) for c in COINS]
-        await asyncio.gather(*tasks)
+        print("🔄 Checking all coins...")
+
+        for coin in COINS:
+            check_coin(coin)
+
         save_state(state)
-        await asyncio.sleep(30)
 
-# 🌐 server
-app = Flask(__name__)
+        time.sleep(60)  # 1 min loop
 
-@app.route("/")
-def home():
-    return "Bot Running 🚀"
-
-def run_web():
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
-
+# ===== START =====
 if __name__ == "__main__":
-    threading.Thread(target=run_web).start()
-    asyncio.run(run_bot())
+    run_bot()

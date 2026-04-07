@@ -2,7 +2,6 @@ import requests
 import time
 import json
 import os
-import asyncio
 from flask import Flask
 from threading import Thread
 
@@ -11,11 +10,11 @@ BOT_TOKEN = "YOUR_BOT_TOKEN"
 CHAT_ID = "YOUR_CHAT_ID"
 
 COINS = [
-    "BTCUSDT","ETHUSDT","BNBUSDT","XRPUSDT","SOLUSDT",
-    "ADAUSDT","DOGEUSDT","MATICUSDT","DOTUSDT","TRXUSDT",
-    "LTCUSDT","BCHUSDT","LINKUSDT","ATOMUSDT","ETCUSDT",
-    "FILUSDT","APTUSDT","ARBUSDT","OPUSDT","AVAXUSDT",
-    "NEARUSDT","ALGOUSDT","FTMUSDT","EGLDUSDT","SANDUSDT"
+"BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT",
+"ADAUSDT","DOGEUSDT","MATICUSDT","DOTUSDT","TRXUSDT",
+"LTCUSDT","BCHUSDT","LINKUSDT","ATOMUSDT","ETCUSDT",
+"FILUSDT","APTUSDT","ARBUSDT","OPUSDT","AVAXUSDT",
+"NEARUSDT","ALGOUSDT","FTMUSDT","EGLDUSDT","SANDUSDT"
 ]
 
 # ================= FLASK =================
@@ -25,18 +24,15 @@ app = Flask(__name__)
 def home():
     return "Bot Running 🚀"
 
-def run_web():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
-
-# ================= TELEGRAM (HTTP API) =================
+# ================= TELEGRAM DEBUG =================
 def send(msg):
     try:
-        print("Sending:", msg)
+        print("📤 Sending:", msg)
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        requests.get(url, params={"chat_id": CHAT_ID, "text": msg})
+        r = requests.get(url, params={"chat_id": CHAT_ID, "text": msg})
+        print("📡 Response:", r.text)
     except Exception as e:
-        print("Telegram Error:", e)
+        print("❌ Telegram Error:", e)
 
 # ================= STATE =================
 STATE_FILE = "state.json"
@@ -66,14 +62,19 @@ def get_prev_day_levels(symbol):
         "CLOSE": float(prev[4])
     }
 
-# ================= BOT LOOP =================
+# ================= BOT =================
 def run_bot():
+    print("🔥 BOT FUNCTION STARTED")
+
+    # 👉 DEBUG START MESSAGE
+    send("🔥 BOT STARTED TEST")
+
     time.sleep(5)
 
     send("🚀 BOT STARTED")
     send("🟢 BOT LIVE")
 
-    # reset state every restart
+    # 👉 RESET STATE (हर deploy पर fresh alert)
     if os.path.exists(STATE_FILE):
         os.remove(STATE_FILE)
 
@@ -86,6 +87,8 @@ def run_bot():
             try:
                 price = get_price(symbol)
                 levels = get_prev_day_levels(symbol)
+
+                print(f"Checking {symbol} | Price: {price}")
 
                 for name, lvl in levels.items():
                     key = f"{symbol}-{name}"
@@ -107,5 +110,10 @@ def run_bot():
 
 # ================= RUN =================
 if __name__ == "__main__":
-    Thread(target=run_web).start()
-    run_bot()
+    # 👉 BOT THREAD (IMPORTANT)
+    bot_thread = Thread(target=run_bot)
+    bot_thread.daemon = True
+    bot_thread.start()
+
+    # 👉 FLASK MAIN (Render needs port)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))

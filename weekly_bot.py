@@ -3,8 +3,8 @@ import time
 import json
 import os
 import asyncio
-from datetime import datetime
-from telegram import Bot
+from flask import Flask
+from threading import Thread
 
 # ================= CONFIG =================
 BOT_TOKEN = "YOUR_BOT_TOKEN"
@@ -18,12 +18,23 @@ COINS = [
     "NEARUSDT","ALGOUSDT","FTMUSDT","EGLDUSDT","SANDUSDT"
 ]
 
-bot = Bot(token=BOT_TOKEN)
+# ================= FLASK =================
+app = Flask(__name__)
 
-# ================= TELEGRAM =================
-async def send(msg):
+@app.route('/')
+def home():
+    return "Bot Running 🚀"
+
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
+
+# ================= TELEGRAM (HTTP API) =================
+def send(msg):
     try:
-        await bot.send_message(chat_id=CHAT_ID, text=msg)
+        print("Sending:", msg)
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        requests.get(url, params={"chat_id": CHAT_ID, "text": msg})
     except Exception as e:
         print("Telegram Error:", e)
 
@@ -41,8 +52,7 @@ def save_state(state):
 # ================= DATA =================
 def get_price(symbol):
     url = "https://fapi.binance.com/fapi/v1/ticker/price"
-    data = requests.get(url, params={"symbol": symbol}).json()
-    return float(data["price"])
+    return float(requests.get(url, params={"symbol": symbol}).json()["price"])
 
 def get_prev_day_levels(symbol):
     url = "https://fapi.binance.com/fapi/v1/klines"
@@ -56,20 +66,22 @@ def get_prev_day_levels(symbol):
         "CLOSE": float(prev[4])
     }
 
-# ================= BOT LOGIC =================
-async def run_bot():
-    print("🚀 BOT STARTED")
-    await send("🚀 BOT STARTED")
-    await send("🟢 BOT LIVE")
+# ================= BOT LOOP =================
+def run_bot():
+    time.sleep(5)
 
-    # 🔥 AUTO RESET STATE (FIRST TIME)
+    send("🚀 BOT STARTED")
+    send("🟢 BOT LIVE")
+
+    # reset state every restart
     if os.path.exists(STATE_FILE):
         os.remove(STATE_FILE)
 
     state = load_state()
 
     while True:
-        print("⚡ Checking coins...")
+        print("🔄 Checking coins...")
+
         for symbol in COINS:
             try:
                 price = get_price(symbol)
@@ -78,12 +90,12 @@ async def run_bot():
                 for name, lvl in levels.items():
                     key = f"{symbol}-{name}"
 
-                    # 🔥 TOUCH LOGIC (0.2% range)
+                    # 🔥 TOUCH LOGIC (0.2%)
                     if abs(price - lvl) / lvl < 0.002:
                         if not state.get(key):
                             msg = f"🚨 {symbol} {name} TOUCH\nLevel: {lvl}\nPrice: {price}"
                             print(msg)
-                            await send(msg)
+                            send(msg)
                             state[key] = True
 
                 save_state(state)
@@ -95,4 +107,5 @@ async def run_bot():
 
 # ================= RUN =================
 if __name__ == "__main__":
-    asyncio.run(run_bot())
+    Thread(target=run_web).start()
+    run_bot()
